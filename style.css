@@ -3,3 +3,7 @@
   border-color: black;
   border-width: 1px;
 }
+
+#draw-buttons {
+	display: flex;
+}
