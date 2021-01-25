@@ -32,21 +32,22 @@ function draw() {
   clear(framebuffer, BLACK);
   for(let i = 0; i < MODEL.faces.length; i++) {
     let face = MODEL.faces[i];
-    let v0 = MODEL.vertices[face.v0i];
-    let x0 = Math.floor((v0.x + 1) / 2 * frame.height);
-    let y0 = frame.height - Math.floor((v0.y + 1) / 2 * frame.height);
-    let v1 = MODEL.vertices[face.v1i];
-    let x1 = Math.floor((v1.x + 1) / 2 * frame.height);
-    let y1 = frame.height - Math.floor((v1.y + 1) / 2 * frame.height);
-    let v2 = MODEL.vertices[face.v2i];
-    let x2 = Math.floor((v2.x + 1) / 2 * frame.height);
-    let y2 = frame.height - Math.floor((v2.y + 1) / 2 * frame.height);
-    wireTriangle(x0, y0, x1, y1, x2, y2, WHITE, framebuffer, frame.width);
+    let [x0,y0] = projection(MODEL.vertices[face.v0i]);
+    let [x1,y1] = projection(MODEL.vertices[face.v1i]);
+    let [x2,y2] = projection(MODEL.vertices[face.v2i]);
+    scanlineTriangle(x0, y0, x1, y1, x2, y2, WHITE, framebuffer, frame.width);
   }
   let endDraw = new Date().getTime();
   blit(framebuffer);
   let end = new Date().getTime();
-  console.log(`Total: ${end-start}, Draw: ${endDraw-start}`);
+  console.log(`Total: ${end-start}, Draw: ${endDraw-start}, Blit: ${end-endDraw}`);
+}
+
+function projection(vertex) {
+  return [
+    Math.floor((vertex.x + 1) / 2 * frame.height),
+    frame.height - Math.floor((vertex.y + 1) / 2 * frame.height)
+  ];
 }
 
 function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, buffer, width) {
