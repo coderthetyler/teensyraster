@@ -12,11 +12,30 @@ let context = frame.getContext('2d');
 const surface = context.createImageData(frame.width, frame.height);
 const framebuffer = makeBuffer(frame.width*frame.height, BLACK);
 
+let drawFunction = scanlineTriangle;
+const drawFunctions = {
+  'wireframe': wireTriangle,
+  'scanline': scanlineTriangle
+};
+
+document.addEventListener('DOMContentLoaded', function(e) {
+    var container = document.getElementById('draw-buttons');
+
+    Object.keys(drawFunctions).forEach(k => {
+    	const button = document.createElement('button');
+    	button.onclick = () => setDrawFunction(k);
+    	button.innerText = k[0].toUpperCase() + k.slice(1);
+    	container.append(button);
+	});
+});
+
 document.addEventListener('keydown', function(e) {
   if(e.code == 'KeyR') {
     draw();
   }
 });
+
+window.addEventListener('touchend', draw);
 
 function init() {
   fetchText('https://raw.githubusercontent.com/ssloy/tinyrenderer/f6fecb7ad493264ecd15e230411bfb1cca539a12/obj/african_head.obj')
@@ -35,7 +54,7 @@ function draw() {
     let [x0,y0] = projection(MODEL.vertices[face.v0i]);
     let [x1,y1] = projection(MODEL.vertices[face.v1i]);
     let [x2,y2] = projection(MODEL.vertices[face.v2i]);
-    scanlineTriangle(x0, y0, x1, y1, x2, y2, WHITE, framebuffer, frame.width);
+    drawFunction(x0, y0, x1, y1, x2, y2, WHITE, framebuffer, frame.width);
   }
   let endDraw = new Date().getTime();
   blit(framebuffer);
@@ -216,4 +235,9 @@ async function fetchText(url) {
   let res = await fetch(url);
   let text = await res.text();
   return text;
+}
+
+function setDrawFunction(e) {
+  drawFunction = drawFunctions[e];
+  draw();
 }
