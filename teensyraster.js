@@ -32,18 +32,16 @@ function draw() {
   clear(framebuffer, BLACK);
   for(let i = 0; i < MODEL.faces.length; i++) {
     let face = MODEL.faces[i];
-    let triangle = {
-      v0: MODEL.vertices[face.v0i],
-      v1: MODEL.vertices[face.v1i],
-      v2: MODEL.vertices[face.v2i]
-    };
-    if(Math.random() > 0.66) {
-      wireframe(triangle, WHITE, framebuffer, frame.width);
-    }else if(Math.random() > 0.5) {
-      wireframe(triangle, GREEN, framebuffer, frame.width);
-    }else{
-      wireframe(triangle, BLUE, framebuffer, frame.width);
-    }
+    let v0 = MODEL.vertices[face.v0i];
+    let x0 = Math.floor((v0.x + 1) / 2 * frame.height);
+    let y0 = frame.height - Math.floor((v0.y + 1) / 2 * frame.height);
+    let v1 = MODEL.vertices[face.v1i];
+    let x1 = Math.floor((v1.x + 1) / 2 * frame.height);
+    let y1 = frame.height - Math.floor((v1.y + 1) / 2 * frame.height);
+    let v2 = MODEL.vertices[face.v2i];
+    let x2 = Math.floor((v2.x + 1) / 2 * frame.height);
+    let y2 = frame.height - Math.floor((v2.y + 1) / 2 * frame.height);
+    wireTriangle(x0, y0, x1, y1, x2, y2, WHITE, framebuffer, frame.width);
   }
   let endDraw = new Date().getTime();
   blit(framebuffer);
@@ -51,18 +49,64 @@ function draw() {
   console.log(`Total: ${end-start}, Draw: ${endDraw-start}`);
 }
 
-function wireframe(triangle, color, buffer, width) {
-  line(triangle.v0, triangle.v1, color, buffer, width);
-  line(triangle.v1, triangle.v2, color, buffer, width);
-  line(triangle.v2, triangle.v0, color, buffer, width);
+function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, buffer, width) {
+  color = color * Math.random();
+  // sort vertices vertically
+  if(y0 > y1) {
+    let swapY = y0; y0 = y1; y1 = swapY;
+    let swapX = x0; x0 = x1; x1 = swapX;
+  }
+  if(y0 > y2) {
+    let swapY = y0; y0 = y2; y2 = swapY;
+    let swapX = x0; x0 = x2; x2 = swapX;
+  }
+  if(y1 > y2) {
+    let swapY = y1; y1 = y2; y2 = swapY;
+    let swapX = x1; x1 = x2; x2 = swapX;
+  }
+  let totalHeight = y2-y0;
+  // draw bottom of triangle
+  for(let y = y0; y <= y1; y++) {
+    let segmentHeight = y1-y0+1;
+    let a = (y-y0)/totalHeight;
+    let b = (y-y0)/segmentHeight;
+    let ax = x0 + (x2-x0) * a;
+    let bx = x0 + (x1-x0) * b;
+    if(ax > bx) {
+      let swap = ax; ax = bx; bx = swap;
+    }
+    ax = Math.floor(ax);
+    bx = Math.ceil(bx);
+    for(let x = ax; x < bx; x++) {
+      buffer[x+y*width] = color;
+    }
+  }
+  // draw top of triangle
+  for(let y = y1; y <= y2; y++) {
+    let segmentHeight = y2-y1+1;
+    let a = (y-y0)/totalHeight;
+    let b = (y-y1)/segmentHeight;
+    let ax = x0 + (x2-x0) * a;
+    let bx = x1 + (x2-x1) * b;
+    if(ax > bx) {
+      let swap = ax; ax = bx; bx = swap;
+    }
+    ax = Math.floor(ax);
+    bx = Math.ceil(bx);
+    for(let x = ax; x < bx; x++) {
+      buffer[x+y*width] = color;
+    }
+  }
 }
 
-function line(v0, v1, color, buffer, width) {
+function wireTriangle(x0, y0, x1, y1, x2, y2, color, buffer, width) {
+  line(x0, y0, x1, y1, color, buffer, width);
+  line(x1, y1, x2, y2, color, buffer, width);
+  line(x2, y2, x0, y0, color, buffer, width);
+}
+
+function line(x0, y0, x1, y1, color, buffer, width) {
   let isSteep = false;
-  let x0 = Math.round(v0.x);
-  let y0 = Math.round(v0.y);
-  let x1 = Math.round(v1.x);
-  let y1 = Math.round(v1.y);
   if(Math.abs(x0-x1) < Math.abs(y0-y1)) {
     isSteep = true;
     let swap0 = x0; x0 = y0; y0 = swap0;
@@ -151,8 +195,8 @@ function parseObj(text) {
   for(let ln of text.split('\n')) {
     if(ln.startsWith('v')) {
       let vtext = ln.split(' ');
-      let x = (+vtext[1] + 1) / 2 * frame.height;
-      let y = frame.height - (+vtext[2] + 1) / 2 * frame.height;
+      let x = +vtext[1];
+      let y = +vtext[2];
       let z = +vtext[3];
       vertices.push({ x, y, z });
     }
