@@ -37,10 +37,15 @@ function draw() {
     let [x2,y2] = projection(MODEL.vertices[face.v2i]);
     scanlineTriangle(x0, y0, x1, y1, x2, y2, WHITE, framebuffer, frame.width);
   }
+  scanlineTriangle(10, 10, 10, 102, 500, 500, RED, framebuffer, frame.width);
   let endDraw = new Date().getTime();
   blit(framebuffer);
   let end = new Date().getTime();
-  console.log(`Total: ${end-start}, Draw: ${endDraw-start}, Blit: ${end-endDraw}`);
+  console.log({
+    total: end-start,
+    draw: endDraw-start,
+    blit: end-endDraw
+  });
 }
 
 function projection(vertex) {
@@ -51,7 +56,11 @@ function projection(vertex) {
 }
 
 function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, buffer, width) {
-  color = color * Math.random();
+  // color = color * Math.random();
+  // ignore degenerate triangles (three points are colinear)
+  if(y0 == y1 && y1 == y2) {
+    return;
+  }
   // sort vertices vertically
   if(y0 > y1) {
     let swapY = y0; y0 = y1; y1 = swapY;
@@ -65,37 +74,33 @@ function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, buffer, width) {
     let swapY = y1; y1 = y2; y2 = swapY;
     let swapX = x1; x1 = x2; x2 = swapX;
   }
-  let totalHeight = y2-y0;
-  // draw bottom of triangle
-  for(let y = y0; y <= y1; y++) {
-    let segmentHeight = y1-y0+1;
-    let a = (y-y0)/totalHeight;
-    let b = (y-y0)/segmentHeight;
-    let ax = x0 + (x2-x0) * a;
-    let bx = x0 + (x1-x0) * b;
-    if(ax > bx) {
-      let swap = ax; ax = bx; bx = swap;
-    }
-    ax = Math.floor(ax);
-    bx = Math.ceil(bx);
-    for(let x = ax; x < bx; x++) {
-      buffer[x+y*width] = color;
+  let height02 = y2-y0;
+  let height01 = y1-y0;
+  let height12 = y2-y1;
+  // draw bottom of triangle (ignore degenerate right triangle)
+  if(height01 != 0) {
+    for(let y = y0; y <= y1; y++) {
+      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / height02);
+      let x01 = Math.round(x0 + (x1-x0) * (y-y0) / height01);
+      if(x02 > x01) {
+        let swap = x02; x02 = x01; x01 = swap;
+      }
+      for(let x = x02; x < x01; x++) {
+        buffer[x+y*width] = color;
+      }
     }
   }
-  // draw top of triangle
-  for(let y = y1; y <= y2; y++) {
-    let segmentHeight = y2-y1+1;
-    let a = (y-y0)/totalHeight;
-    let b = (y-y1)/segmentHeight;
-    let ax = x0 + (x2-x0) * a;
-    let bx = x1 + (x2-x1) * b;
-    if(ax > bx) {
-      let swap = ax; ax = bx; bx = swap;
-    }
-    ax = Math.floor(ax);
-    bx = Math.ceil(bx);
-    for(let x = ax; x < bx; x++) {
-      buffer[x+y*width] = color;
+  // draw top of triangle (ignore degenerate right triangle)
+  if(height12 != 0) {
+    for(let y = y1; y <= y2; y++) {
+      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / height02);
+      let x12 = Math.round(x1 + (x2-x1) * (y-y1) / height12);
+      if(x02 > x12) {
+        let swap = x02; x02 = x12; x12 = swap;
+      }
+      for(let x = x02; x < x12; x++) {
+        buffer[x+y*width] = color;
+      }
     }
   }
 }
