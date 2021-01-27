@@ -11,6 +11,7 @@ let frame = document.getElementById('frame');
 let context = frame.getContext('2d');
 const surface = context.createImageData(frame.width, frame.height);
 const framebuffer = makeBuffer(frame.width*frame.height, BLACK);
+const zbuffer = makeBuffer(frame.width*frame.height, -1);
 
 document.addEventListener('keydown', function(e) {
   if(e.code == 'KeyR') {
@@ -28,16 +29,27 @@ function init() {
 }
 
 function draw() {
+  let [lx, ly, lz] = normalize(0, 0, -1);
   let start = new Date().getTime();
   clear(framebuffer, BLACK);
   for(let i = 0; i < MODEL.faces.length; i++) {
     let face = MODEL.faces[i];
-    let [x0,y0] = projection(MODEL.vertices[face.v0i]);
-    let [x1,y1] = projection(MODEL.vertices[face.v1i]);
-    let [x2,y2] = projection(MODEL.vertices[face.v2i]);
-    scanlineTriangle(x0, y0, x1, y1, x2, y2, WHITE, framebuffer, frame.width);
+    let w0 = MODEL.vertices[face.v0i];
+    let w1 = MODEL.vertices[face.v1i];
+    let w2 = MODEL.vertices[face.v2i];
+    let [sx0,sy0] = projection(w0);
+    let [sx1,sy1] = projection(w1);
+    let [sx2,sy2] = projection(w2);
+    let [nx,ny,nz] = unitNormal(
+      w2.x-w0.x, w2.y-w0.y, w2.z-w0.z, 
+      w1.x-w0.x, w1.y-w0.y, w1.z-w0.z);
+    let intensity = lx*nx+ly*ny+lz*nz;
+    if(intensity > 0) {
+      let color = rgb(255 * intensity, 255 * intensity, 255 * intensity);
+      scanlineTriangle(sx0, sy0, sx1, sy1, sx2, sy2, color, zbuffer, framebuffer, frame.width);
+    }
   }
-  scanlineTriangle(10, 10, 10, 102, 500, 500, RED, framebuffer, frame.width);
+  // scanlineTriangle(10, 10, 10, 102, 2000, 500, RED, framebuffer, frame.width);
   let endDraw = new Date().getTime();
   blit(framebuffer);
   let end = new Date().getTime();
@@ -48,6 +60,34 @@ function draw() {
   });
 }
 
+function unitNormal(x0, y0, z0, x1, y1, z1) {
+  return normalize(...cross(x0, y0, z0, x1, y1, z1));
+}
+
+function normalize(x, y, z) {
+  let len = length(x, y, z);
+  return [
+    x/len, y/len, z/len
+  ];
+}
+
+function length(x, y, z) {
+  return Math.sqrt(x*x+y*y+z*z);
+}
+
+function cross(x0, y0, z0, x1, y1, z1) {
+  let x = y0*z1-z0*y1;
+  let y = z0*x1-x0*z1;
+  let z = x0*y1-y0*x1;
+  return [
+    x, y, z
+  ];
+}
+
+function dot(x0, y0, z0, x1, y1, z1) {
+  return x0*x1 + y0*y1 + z0*z1;
+}
+
 function projection(vertex) {
   return [
     Math.floor((vertex.x + 1) / 2 * frame.height),
@@ -55,8 +95,7 @@ function projection(vertex) {
   ];
 }
 
-function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, buffer, width) {
-  // color = color * Math.random();
+function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, zbuffer, buffer, width) {
   // ignore degenerate triangles (three points are colinear)
   if(y0 == y1 && y1 == y2) {
     return;
@@ -74,29 +113,41 @@ function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, buffer, width) {
     let swapY = y1; y1 = y2; y2 = swapY;
     let swapX = x1; x1 = x2; x2 = swapX;
   }
-  let height02 = y2-y0;
-  let height01 = y1-y0;
-  let height12 = y2-y1;
-  // draw bottom of triangle (ignore degenerate right triangle)
-  if(height01 != 0) {
+  let dy02 = y2-y0;
+  let dy01 = y1-y0;
+  let dy12 = y2-y1;
+  // draw bottom of triangle, if non-degenerate
+  if(dy01 != 0) {
     for(let y = y0; y <= y1; y++) {
-      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / height02);
-      let x01 = Math.round(x0 + (x1-x0) * (y-y0) / height01);
+      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / dy02);
+      let x01 = Math.round(x0 + (x1-x0) * (y-y0) / dy01);
       if(x02 > x01) {
         let swap = x02; x02 = x01; x01 = swap;
+      }
+      if(x02 >= width) {
+        break;
+      }
+      if(x01 > width) {
+        x01 = width;
       }
       for(let x = x02; x < x01; x++) {
         buffer[x+y*width] = color;
       }
     }
   }
-  // draw top of triangle (ignore degenerate right triangle)
-  if(height12 != 0) {
+  // draw top of triangle, if non-degenerate
+  if(dy12 != 0) {
     for(let y = y1; y <= y2; y++) {
-      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / height02);
-      let x12 = Math.round(x1 + (x2-x1) * (y-y1) / height12);
+      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / dy02);
+      let x12 = Math.round(x1 + (x2-x1) * (y-y1) / dy12);
       if(x02 > x12) {
         let swap = x02; x02 = x12; x12 = swap;
+      }
+      if(x02 >= width) {
+        break;
+      }
+      if(x12 > width) {
+        x12 = width;
       }
       for(let x = x02; x < x12; x++) {
         buffer[x+y*width] = color;
