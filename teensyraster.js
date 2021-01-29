@@ -4,6 +4,7 @@ const YELLOW = rgb(255, 255, 100);
 const RED = rgb(255, 0, 0);
 const GREEN = rgb(0, 255, 0);
 const BLUE = rgb(0, 0, 255);
+const PURPLE = rgb(255, 0, 255);
 
 let MODEL;
 
@@ -32,6 +33,7 @@ function draw() {
   let [lx, ly, lz] = normalize(0, 0, -1);
   let start = new Date().getTime();
   clear(framebuffer, BLACK);
+  clear(zbuffer, -Infinity);
   for(let i = 0; i < MODEL.faces.length; i++) {
     let face = MODEL.faces[i];
     let w0 = MODEL.vertices[face.v0i];
@@ -46,18 +48,30 @@ function draw() {
     let intensity = lx*nx+ly*ny+lz*nz;
     if(intensity > 0) {
       let color = rgb(255 * intensity, 255 * intensity, 255 * intensity);
-      scanlineTriangle(sx0, sy0, sx1, sy1, sx2, sy2, color, zbuffer, framebuffer, frame.width);
+      scanlineTriangle(sx0, sy0, w0.z, sx1, sy1, w1.z, sx2, sy2, w2.z, color, zbuffer, framebuffer, frame.width);  
     }
   }
   // scanlineTriangle(10, 10, 10, 102, 2000, 500, RED, framebuffer, frame.width);
   let endDraw = new Date().getTime();
-  blit(framebuffer);
+  scaleZBuffer(zbuffer, 5, 200);
+  blit(zbuffer);
   let end = new Date().getTime();
   console.log({
     total: end-start,
     draw: endDraw-start,
     blit: end-endDraw
   });
+}
+
+function barycenter(ax, ay, bx, by, cx, cy, px, py) {
+  let [i,j,k] = cross(
+    bx-ax, cx-ax, ax-px,
+    by-ay, cy-ay, ay-py);
+  return [
+    1 - (i+j)/k,
+    i/k,
+    j/k
+  ]
 }
 
 function unitNormal(x0, y0, z0, x1, y1, z1) {
@@ -95,7 +109,7 @@ function projection(vertex) {
   ];
 }
 
-function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, zbuffer, buffer, width) {
+function scanlineTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2, color, zbuffer, buffer, width) {
   // ignore degenerate triangles (three points are colinear)
   if(y0 == y1 && y1 == y2) {
     return;
@@ -104,14 +118,17 @@ function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, zbuffer, buffer, width)
   if(y0 > y1) {
     let swapY = y0; y0 = y1; y1 = swapY;
     let swapX = x0; x0 = x1; x1 = swapX;
+    let swapZ = z0; z0 = z1; z1 = swapZ;
   }
   if(y0 > y2) {
     let swapY = y0; y0 = y2; y2 = swapY;
     let swapX = x0; x0 = x2; x2 = swapX;
+    let swapZ = z0; z0 = z2; z2 = swapZ;
   }
   if(y1 > y2) {
     let swapY = y1; y1 = y2; y2 = swapY;
     let swapX = x1; x1 = x2; x2 = swapX;
+    let swapZ = z1; z1 = z2; z2 = swapZ;
   }
   let dy02 = y2-y0;
   let dy01 = y1-y0;
@@ -131,7 +148,13 @@ function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, zbuffer, buffer, width)
         x01 = width;
       }
       for(let x = x02; x < x01; x++) {
-        buffer[x+y*width] = color;
+        let i = x+y*width;
+        let [w, u, v] = barycenter(x0, y0, x1, y1, x2, y2, x, y);
+        let z = w*z0+u*z1+v*z2;
+        if(z > zbuffer[i]) {
+          zbuffer[i] = z;
+          buffer[i] = color;
+        }
       }
     }
   }
@@ -150,7 +173,13 @@ function scanlineTriangle(x0, y0, x1, y1, x2, y2, color, zbuffer, buffer, width)
         x12 = width;
       }
       for(let x = x02; x < x12; x++) {
-        buffer[x+y*width] = color;
+        let i = x+y*width;
+        let [w, u, v] = barycenter(x0, y0, x1, y1, x2, y2, x, y);
+        let z = w*z0+u*z1+v*z2;
+        if(z > zbuffer[i]) {
+          zbuffer[i] = z;
+          buffer[i] = color;
+        }
       }
     }
   }
@@ -202,13 +231,34 @@ function line(x0, y0, x1, y1, color, buffer, width) {
 function blit(buffer) {
   for(let i = 0; i < buffer.length; i++) {
     let p = i*4;
-    let color = buffer[i];
+    let color =  buffer[i];
     surface.data[p+0] = (color >> 16) & 0xFF;
     surface.data[p+1] = (color >> 8) & 0xFF;
     surface.data[p+2] = (color >> 0) & 0xFF;
     surface.data[p+3] = 255;
   }
   context.putImageData(surface, 0, 0);
+}
+
+function scaleZBuffer(buffer, min, max) {
+  let minValue = Infinity;
+  let maxValue = -Infinity;
+  for(let i = 0; i < buffer.length; i++) {
+    if(buffer[i] < minValue && buffer[i] != -Infinity) {
+      minValue = buffer[i];
+    }
+    if(buffer[i] > maxValue) {
+      maxValue = buffer[i];
+    }
+  }
+  for(let i = 0; i < buffer.length; i++) {
+    if(buffer[i] == -Infinity) {
+      buffer[i] = PURPLE;
+    }else{
+      let intensity = Math.floor((buffer[i]-minValue) / (maxValue-minValue) * (max-min)+min);
+      buffer[i] = rgb(intensity, intensity, intensity);
+    }
+  }
 }
 
 /**
