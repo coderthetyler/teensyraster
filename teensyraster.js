@@ -46,15 +46,19 @@ function draw() {
       w2.x-w0.x, w2.y-w0.y, w2.z-w0.z, 
       w1.x-w0.x, w1.y-w0.y, w1.z-w0.z);
     let intensity = lx*nx+ly*ny+lz*nz;
-    if(intensity > 0) {
-      let color = rgb(255 * intensity, 255 * intensity, 255 * intensity);
-      scanlineTriangle(sx0, sy0, w0.z, sx1, sy1, w1.z, sx2, sy2, w2.z, color, zbuffer, framebuffer, frame.width);  
+    // if(intensity <= 0) continue;
+    let color;
+    if(intensity <= 0) {
+      color = PURPLE;
+    }else{
+      color = rgb(255 * intensity, 255 * intensity, 255 * intensity);
     }
+    scanlineTriangle(sx0, sy0, w0.z, sx1, sy1, w1.z, sx2, sy2, w2.z, color, zbuffer, framebuffer, frame.width);
   }
   // scanlineTriangle(10, 10, 10, 102, 2000, 500, RED, framebuffer, frame.width);
   let endDraw = new Date().getTime();
-  scaleZBuffer(zbuffer, 5, 200);
-  blit(zbuffer);
+  // scaleZBuffer(zbuffer, 5, 200); blit(zbuffer);
+  blit(framebuffer);
   let end = new Date().getTime();
   console.log({
     total: end-start,
@@ -104,8 +108,8 @@ function dot(x0, y0, z0, x1, y1, z1) {
 
 function projection(vertex) {
   return [
-    Math.floor((vertex.x + 1) / 2 * frame.height),
-    frame.height - Math.floor((vertex.y + 1) / 2 * frame.height)
+    ((vertex.x + 1) / 2 * frame.height),
+    frame.height - ((vertex.y + 1) / 2 * frame.height)
   ];
 }
 
@@ -135,9 +139,14 @@ function scanlineTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2, color, zbuffer, bu
   let dy12 = y2-y1;
   // draw bottom of triangle, if non-degenerate
   if(dy01 != 0) {
-    for(let y = y0; y <= y1; y++) {
-      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / dy02);
-      let x01 = Math.round(x0 + (x1-x0) * (y-y0) / dy01);
+    for(let y = Math.ceil(y0); y <= Math.floor(y1); y++) {
+      let x02 = x0 + (x2-x0) * (y-y0) / dy02;
+      let x01 = x0 + (x1-x0) * (y-y0) / dy01;
+      if(Math.abs(x02-x01) > 300) {
+        console.log({
+          y, y0
+        });
+      }
       if(x02 > x01) {
         let swap = x02; x02 = x01; x01 = swap;
       }
@@ -147,7 +156,7 @@ function scanlineTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2, color, zbuffer, bu
       if(x01 > width) {
         x01 = width;
       }
-      for(let x = x02; x < x01; x++) {
+      for(let x = Math.ceil(x02); x <= Math.floor(x01); x++) {
         let i = x+y*width;
         let [w, u, v] = barycenter(x0, y0, x1, y1, x2, y2, x, y);
         let z = w*z0+u*z1+v*z2;
@@ -160,9 +169,9 @@ function scanlineTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2, color, zbuffer, bu
   }
   // draw top of triangle, if non-degenerate
   if(dy12 != 0) {
-    for(let y = y1; y <= y2; y++) {
-      let x02 = Math.round(x0 + (x2-x0) * (y-y0) / dy02);
-      let x12 = Math.round(x1 + (x2-x1) * (y-y1) / dy12);
+    for(let y = Math.ceil(y1); y <= Math.floor(y2); y++) {
+      let x02 = x0 + (x2-x0) * (y-y0) / dy02;
+      let x12 = x1 + (x2-x1) * (y-y1) / dy12;
       if(x02 > x12) {
         let swap = x02; x02 = x12; x12 = swap;
       }
@@ -172,7 +181,7 @@ function scanlineTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2, color, zbuffer, bu
       if(x12 > width) {
         x12 = width;
       }
-      for(let x = x02; x < x12; x++) {
+      for(let x = Math.ceil(x02); x <= Math.floor(x12); x++) {
         let i = x+y*width;
         let [w, u, v] = barycenter(x0, y0, x1, y1, x2, y2, x, y);
         let z = w*z0+u*z1+v*z2;
